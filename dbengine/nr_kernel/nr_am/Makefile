@@ -36,6 +36,3 @@ test:
 	make -j
 	sudo make install
 	make installcheck
-	# psql -d neurdb -f ./sql/clean.sql
-	# psql -d neurdb -f ./sql/init.sql
-	# psql -d neurdb -f ./sql/index_scan.sql
