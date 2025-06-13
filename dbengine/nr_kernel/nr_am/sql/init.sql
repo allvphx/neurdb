@@ -3,3 +3,4 @@ CREATE OR REPLACE FUNCTION run_nram_tests()
 RETURNS void
 AS 'nram', 'run_nram_tests'
 LANGUAGE C STRICT;
+SET client_min_messages TO warning;
