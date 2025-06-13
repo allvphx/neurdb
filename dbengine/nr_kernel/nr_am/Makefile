@@ -19,7 +19,7 @@ PGFILEDESC = "nram - CCaaLF custom table access method"
 PG_CPPFLAGS += -I/usr/local/include -I./src/
 SHLIB_LINK += -L/usr/local/lib -lrocksdb -Wl,-rpath,/usr/local/lib
 
-REGRESS = clean init unit_tests table_scan xact_basic
+REGRESS = clean init unit_tests table_scan xact_basic index_scan
 
 PG_CONFIG = ${NEURDBPATH}/psql/bin/pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
@@ -36,3 +36,6 @@ test:
 	make -j
 	sudo make install
 	make installcheck
+	# psql -d neurdb -f ./sql/clean.sql
+	# psql -d neurdb -f ./sql/init.sql
+	# psql -d neurdb -f ./sql/index_scan.sql
