@@ -5,6 +5,8 @@
 #include "postgres.h"
 #include "funcapi.h"
 #include "ipc/msg.h"
+#include "ipc/rocks_service.h"
+
 #include <sys/time.h>
 #include <sys/wait.h>
 
@@ -420,6 +422,95 @@ void run_kv_channel_msg_basic_test(void) {
     elog(INFO, "KV channel multi-process test passed");
 }
 
+
+void run_rocks_service_basic_test(void) {
+    pid_t service_pid;
+    KVChannel *channel;
+    NRAMKey key;
+    NRAMValue value;
+    KVMsg *put_msg;
+    Size key_len, val_len, total_len;
+    char *serialized_key;
+    char *serialized_value;
+    KVChannel *resp_chan;
+    KVMsg resp;
+    KVMsg *get_msg;
+    KVMsg get_resp;
+    NRAMValue val_out;
+    service_pid = fork();
+    if (service_pid == 0) {
+        start_rocks_service(1);
+        _exit(0);
+    }
+    pg_usleep(1000000);     // sleep 1 second for service to start
+
+    channel = KVChannelInit("rocks_service_channel", false);
+
+    /* PUT message */
+    key = palloc0(sizeof(NRAMKeyData));
+    key->tableOid = 1234;
+    key->tid = 1;
+
+    value = palloc0(sizeof(NRAMValueData) + sizeof(NRAMValueFieldData) + 8);
+    value->xact_id = 1;
+    value->nfields = 1;
+    NRAMValueFieldData *field = (NRAMValueFieldData *)value->data;
+    field->attnum = 1;
+    field->type_oid = TEXTOID;
+    field->len = 8;
+    memcpy((char *)field + sizeof(NRAMValueFieldData), "ABCDEFG", 8);
+
+    put_msg = palloc0(sizeof(KVMsg));
+
+    serialized_key = tkey_serialize(key, &key_len);
+    serialized_value = tvalue_serialize(value, &val_len);
+    total_len = key_len + val_len + sizeof(Size);
+
+    put_msg->header.op = kv_put;
+    put_msg->header.entitySize = total_len;
+    put_msg->header.respChannel = 9999;
+    put_msg->entity = palloc(total_len);
+    memcpy(put_msg->entity, &key_len, sizeof(Size));
+    memcpy((char *)put_msg->entity + sizeof(Size), serialized_key, key_len);
+    memcpy((char *)put_msg->entity + sizeof(Size) + key_len, serialized_value, val_len);
+
+    resp_chan = KVChannelInit("kv_resp_9999", true);
+    KVChannelPushMsg(channel, put_msg, true);
+
+    if (!KVChannelPopMsg(resp_chan, &resp, true) || resp.header.status != kv_status_ok)
+        elog(ERROR, "rocks_service_basic_test: PUT failed");
+    elog(INFO, "rocks_service_basic_test: PUT successful");
+
+    /* GET message */
+    get_msg = palloc0(sizeof(KVMsg));
+    get_msg->header.op = kv_get;
+    get_msg->header.respChannel = 9999;
+    get_msg->header.entitySize = key_len;
+    get_msg->entity = serialized_key;
+
+    KVChannelPushMsg(channel, get_msg, true);
+    if (!KVChannelPopMsg(resp_chan, &get_resp, true) || get_resp.header.status != kv_status_ok)
+        elog(ERROR, "rocks_service_basic_test: GET failed");
+
+    val_out = tvalue_deserialize((char *)get_resp.entity, get_resp.header.entitySize);
+    if (memcmp(val_out->data, "ABCDEFG", 8) != 0)
+        elog(ERROR, "rocks_service_basic_test: value mismatch");
+
+    elog(INFO, "run_rocks_service_basic_test passed!");
+
+    pfree(serialized_key);
+    pfree(put_msg->entity); pfree(put_msg);
+    pfree(get_msg);
+    pfree(get_resp.entity);
+    pfree(key);
+    pfree(value);
+    pfree(val_out);
+    KVChannelDestroy(resp_chan);
+    KVChannelDestroy(channel);
+
+    kill(service_pid, SIGTERM);
+    waitpid(service_pid, NULL, 0);
+}
 
 
 // /*
