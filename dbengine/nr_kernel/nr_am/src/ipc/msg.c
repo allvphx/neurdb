@@ -5,6 +5,8 @@
 #include "portability/instr_time.h"
 #include "storage/pmsignal.h"
 
+static const uint64 buf_mask = KV_CHANNEL_BUFSIZE-1;
+
 KVChannel* KVChannelInit(const char* name, bool create) {
     bool found;
     KVChannel* chan;
@@ -50,7 +52,7 @@ void PrintChannelContent(KVChannel* channel) {
                    used);
 
     for (uint64 i = 0; i < used && i < KV_CHANNEL_BUFSIZE; i++) {
-        uint64 real_pos = (pos + i) % KV_CHANNEL_BUFSIZE;
+        uint64 real_pos = (pos + i) & buf_mask;
         unsigned char c = channel->shared->buffer[real_pos];
 
         if (c >= 32 && c <= 126)  // printable
@@ -89,7 +91,7 @@ bool KVChannelPush(KVChannel* channel, const void* data, Size len, long timeout_
                 channel->name, channel->shared->head, channel->shared->tail, used, space, len);
 
             pos = channel->shared->tail;
-            end = (pos + len) % KV_CHANNEL_BUFSIZE;
+            end = (pos + len) & buf_mask;
 
             if (pos + len <= KV_CHANNEL_BUFSIZE) {
                 NRAM_TEST_INFO("[Push] case 1: pos=%lu end=%lu", pos, end);
@@ -158,7 +160,7 @@ static bool UnsafeKVChannelPop(KVChannel* channel, void* out, Size len) {
             "[Pop %s] head=%lu tail=%lu used=%lu space=%lu len=%lu",
             channel->name, channel->shared->head, channel->shared->tail, used, KV_CHANNEL_BUFSIZE-used, len);
         pos = channel->shared->head;
-        end = (pos + len) % KV_CHANNEL_BUFSIZE;
+        end = (pos + len) & buf_mask;
 
         if (pos + len <= KV_CHANNEL_BUFSIZE) {
             memcpy(out, channel->shared->buffer + pos, len);
