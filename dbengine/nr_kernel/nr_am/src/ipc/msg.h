@@ -15,7 +15,7 @@
  */
 
 
-#define KV_CHANNEL_BUFSIZE 32768
+#define KV_CHANNEL_BUFSIZE (1 << 15)
 
 typedef struct KVChannelShared {
     pg_atomic_uint32 is_running;
