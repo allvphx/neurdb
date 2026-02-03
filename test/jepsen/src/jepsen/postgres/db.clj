@@ -19,7 +19,7 @@
 
 (def user
   "The OS user which will run postgres."
-  "postgres")
+  "neurdb")
 
 (def just-postgres-log-file
   "/var/log/postgresql/postgresql-12-main.log")
